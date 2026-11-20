@@ -1,8 +1,10 @@
-// Vice Cover Studio — editor.
+// Vice Cover Studio — editor (round 2).
 // Controls on the left, live canvas preview on the right. Photos are read on
 // this machine only and never uploaded. Drag on a panel to pan it, drop a file
-// on a panel to fill it, and export a PNG in one click.
-import { drawCover, exportCover, GRADES, LAYOUTS, SIZES, layoutPanels, topAnchor } from './cover.js';
+// on a panel to fill it, and export a PNG in one click. Five photo slots, cast
+// role tags, face anchors, poster dressing (callout, seal, billing block) and
+// a title-over-the-art mode.
+import { drawCover, exportCover, GRADES, LAYOUTS, SIZES, DEFAULT_ROLES, layoutPanels, topAnchor } from './cover.js';
 import { runShot } from './shots.js';
 
 /** Loads an image from a URL, resolving to the image once it can be drawn. */
@@ -22,7 +24,12 @@ export function blankState() {
     sizeKey: 'wide',
     caption: 'VICE CITY',
     subtitle: 'A STORY IN THREE FRAMES',
-    photos: [null, null, null],
+    callout: '',
+    seal: true,
+    billing: true,
+    titleMode: 'band',
+    roles: [...DEFAULT_ROLES],
+    photos: [null, null, null, null, null],
   };
 }
 
@@ -42,6 +49,10 @@ export function initEditor(opts = {}) {
   const status = document.getElementById('status');
   const captionInput = document.getElementById('caption');
   const subtitleInput = document.getElementById('subtitle');
+  const calloutInput = document.getElementById('callout');
+  const sealInput = document.getElementById('seal');
+  const billingInput = document.getElementById('billing');
+  const titleModeSelect = document.getElementById('title-mode');
   const sizeSelect = document.getElementById('size');
 
   function setStatus(text) {
@@ -62,7 +73,13 @@ export function initEditor(opts = {}) {
     const ctx = canvas.getContext('2d');
     drawCover(ctx, w, h, state, true);
     const filled = state.photos.filter(Boolean).length;
-    setStatus(`${filled} of 3 photos · ${LAYOUTS[state.layout].label} · ${GRADES[state.grade].label} grade · preview ${w}×${h}`);
+    setStatus(`${filled} of 5 photos · ${LAYOUTS[state.layout].label} · ${GRADES[state.grade].label} grade · preview ${w}×${h}`);
+  }
+
+  // The rect a photo slot occupies in the current layout (art panels have no slot).
+  function rectForSlot(i) {
+    const panels = layoutPanels(state.layout, canvas.width, canvas.height);
+    return panels.find((p) => p.photo === i) || panels[Math.min(i, panels.length - 1)];
   }
 
   function refreshPanelControls() {
@@ -74,18 +91,39 @@ export function initEditor(opts = {}) {
       if (zoom) zoom.value = slot ? slot.zoom : 1;
       const fit = box.querySelector('.fit');
       if (fit) fit.value = slot ? slot.fit : 'fill';
+      const role = box.querySelector('.role');
+      if (role) role.value = state.roles[i] || '';
     });
   }
 
   function setPhoto(i, img) {
     const slot = newSlot(img);
     // Start panned to the top of the photo so faces are not cropped out.
-    const rect = layoutPanels(state.layout, canvas.width, canvas.height)[i];
+    const rect = rectForSlot(i);
     const anchor = topAnchor(img, rect, slot.zoom);
     slot.ox = anchor.ox;
     slot.oy = anchor.oy;
     state.photos[i] = slot;
     refreshPanelControls();
+    redraw();
+  }
+
+  // Face anchor: pin the crop to the top (faces), the middle, or the bottom.
+  function anchorSlot(i, where) {
+    const slot = state.photos[i];
+    if (!slot) return;
+    const rect = rectForSlot(i);
+    if (where === 'center') {
+      slot.ox = 0;
+      slot.oy = 0;
+    } else {
+      const anchor = topAnchor(slot.img, rect, slot.zoom);
+      slot.ox = anchor.ox;
+      slot.oy = where === 'top' ? anchor.oy : -anchor.oy;
+    }
+    document.querySelectorAll(`[data-panel="${i}"] [data-anchor]`).forEach((b) => {
+      b.classList.toggle('active', b.dataset.anchor === where);
+    });
     redraw();
   }
 
@@ -102,8 +140,16 @@ export function initEditor(opts = {}) {
   // --- text controls ---
   captionInput.value = state.caption;
   subtitleInput.value = state.subtitle;
+  calloutInput.value = state.callout;
+  sealInput.checked = state.seal;
+  billingInput.checked = state.billing;
+  titleModeSelect.value = state.titleMode;
   captionInput.addEventListener('input', () => { state.caption = captionInput.value; redraw(); });
   subtitleInput.addEventListener('input', () => { state.subtitle = subtitleInput.value; redraw(); });
+  calloutInput.addEventListener('input', () => { state.callout = calloutInput.value; redraw(); });
+  sealInput.addEventListener('change', () => { state.seal = sealInput.checked; redraw(); });
+  billingInput.addEventListener('change', () => { state.billing = billingInput.checked; redraw(); });
+  titleModeSelect.addEventListener('change', () => { state.titleMode = titleModeSelect.value; redraw(); });
 
   // --- layout / grade / size buttons ---
   document.querySelectorAll('[data-layout]').forEach((btn) => {
@@ -140,7 +186,7 @@ export function initEditor(opts = {}) {
       file.value = '';
     });
     box.querySelector('.sample').addEventListener('click', () => {
-      loadSample(i, i === 1 ? 'boulevard' : 'pier');
+      loadSample(i, i % 2 === 0 ? 'pier' : 'boulevard');
     });
     box.querySelector('.zoom').addEventListener('input', (e) => {
       if (state.photos[i]) {
@@ -154,6 +200,13 @@ export function initEditor(opts = {}) {
         redraw();
       }
     });
+    box.querySelector('.role').addEventListener('input', (e) => {
+      state.roles[i] = e.target.value;
+      redraw();
+    });
+    box.querySelectorAll('[data-anchor]').forEach((btn) => {
+      btn.addEventListener('click', () => anchorSlot(i, btn.dataset.anchor));
+    });
     box.querySelector('.clear').addEventListener('click', () => {
       state.photos[i] = null;
       refreshPanelControls();
@@ -162,10 +215,8 @@ export function initEditor(opts = {}) {
   });
 
   document.getElementById('samples-all').addEventListener('click', async () => {
-    await loadSample(0, 'pier');
-    await loadSample(1, 'boulevard');
-    await loadSample(2, 'pier');
-    setStatus('Sample photos loaded into all three panels');
+    for (let i = 0; i < 5; i++) await loadSample(i, i % 2 === 0 ? 'pier' : 'boulevard');
+    setStatus('Sample photos loaded into all five panels');
   });
 
   // --- drag to pan, drop to fill ---
@@ -177,7 +228,8 @@ export function initEditor(opts = {}) {
     const panels = layoutPanels(state.layout, canvas.width, canvas.height);
     for (let i = 0; i < panels.length; i++) {
       const p = panels[i];
-      if (px >= p.x && px <= p.x + p.w && py >= p.y && py <= p.y + p.h) return { i, rect: p, px, py };
+      if (p.photo < 0) continue;
+      if (px >= p.x && px <= p.x + p.w && py >= p.y && py <= p.y + p.h) return { i: p.photo, rect: p, px, py };
     }
     return null;
   }

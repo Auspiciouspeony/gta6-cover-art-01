@@ -3,6 +3,8 @@
 // build step, no network requests), and this program hands it in: it copies
 // app/ and screenshots/ from beside this file into the output directory and
 // writes dossier.json there with the vendored make.fun library.
+// Round 2: 8 layouts, 8 grades, 5 photo slots, cast role tags, face anchors,
+// callouts, seal and billing block, pop-out hero and title-over-the-art mode.
 //
 // Run locally with:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts

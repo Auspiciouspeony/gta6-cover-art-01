@@ -41,6 +41,12 @@ button.active { background: var(--accent); border-color: var(--accent); color: #
 .panel { border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 8px; background: #180b2b; }
 .panel.filled { border-color: var(--accent-2); }
 .panel-name { font-weight: 800; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent-2); }
+.anchor-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.anchor-label { font-weight: 600; font-size: 13px; color: var(--muted); }
+.anchor-row button { padding: 5px 9px; font-size: 13px; }
+.anchor-row button.active { background: var(--accent-2); border-color: var(--accent-2); color: #1c0a2e; }
+.check-label { flex-direction: row; align-items: center; gap: 8px; font-weight: 600; }
+.check-label input { accent-color: var(--accent); width: 16px; height: 16px; }
 .file-label { flex-direction: row; align-items: center; gap: 8px; }
 .file-label input { flex: 1; min-width: 0; }
 .slider-label { flex-direction: row; align-items: center; gap: 8px; }

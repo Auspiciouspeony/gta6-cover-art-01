@@ -1,7 +1,9 @@
-// Fixed scenes for screenshots and export checks.
+// Fixed scenes for screenshots and export checks (round 2).
 // ?shot=editor — the editor with sample photos loaded.
 // ?shot=cover&photo=<pier|boulevard>&caption=<text>&size=<wide|square|portrait>
-//   &layout=<a|b|c>&grade=<sunset|neon|vice> — the cover alone, full-bleed.
+//   &layout=<a|b|c|d|e|f|g|h>&grade=<sunset|neon|vice|gold|teal|rose|dusk|ink>
+//   &roles=<comma list>&callout=<text>&seal=<0|1>&billing=<0|1>
+//   &titleMode=<band|over> — the cover alone, full-bleed.
 // ?shot=exporttest — renders every export size and reports their pixel sizes.
 // window.__shotReady is set once the scene is painted.
 import { blankState, initEditor, loadImage } from './main.js';
@@ -13,6 +15,17 @@ function markReady() {
   }));
 }
 
+function applyPosterParams(state, query) {
+  const roles = query.get('roles');
+  if (roles) state.roles = roles.split(',').map((r) => r.trim().toUpperCase()).slice(0, 5);
+  const callout = query.get('callout');
+  if (callout !== null) state.callout = callout;
+  if (query.get('seal') !== null) state.seal = query.get('seal') !== '0';
+  if (query.get('billing') !== null) state.billing = query.get('billing') !== '0';
+  const titleMode = query.get('titleMode');
+  if (titleMode === 'over' || titleMode === 'band') state.titleMode = titleMode;
+}
+
 async function coverScene(query) {
   document.body.classList.add('shot-cover');
   const state = blankState();
@@ -22,21 +35,23 @@ async function coverScene(query) {
   if (layout) state.layout = layout;
   const grade = query.get('grade');
   if (grade) state.grade = grade;
+  applyPosterParams(state, query);
   const size = SIZES[query.get('size')] || SIZES.wide;
   const photo = query.get('photo') || 'pier';
   const canvas = document.getElementById('cover');
   canvas.width = size.w;
   canvas.height = size.h;
-  const hero = await loadImage(`samples/${photo}.jpg`);
-  const second = await loadImage(`samples/${photo === 'pier' ? 'boulevard' : 'pier'}.jpg`);
   const panels = layoutPanels(state.layout, size.w, size.h);
-  const place = (img, i, zoom) => {
-    const anchor = topAnchor(img, panels[i], zoom);
-    return { img, zoom, ox: anchor.ox, oy: anchor.oy, fit: 'fill' };
-  };
-  state.photos[0] = place(hero, 0, 1);
-  state.photos[1] = place(second, 1, 1);
-  state.photos[2] = place(hero, 2, 1.1);
+  const names = ['pier', 'boulevard', 'pier', 'boulevard', 'pier'];
+  const loaded = {};
+  for (let i = 0; i < 5; i++) {
+    const name = i === 0 ? photo : names[i];
+    if (!loaded[name]) loaded[name] = await loadImage(`samples/${name}.jpg`);
+    const rect = panels.find((p) => p.photo === i) || panels[Math.min(i, panels.length - 1)];
+    const zoom = i === 2 ? 1.1 : 1;
+    const anchor = topAnchor(loaded[name], rect, zoom);
+    state.photos[i] = { img: loaded[name], zoom, ox: anchor.ox, oy: anchor.oy, fit: 'fill' };
+  }
   drawCover(canvas.getContext('2d'), size.w, size.h, state, false);
   markReady();
 }
@@ -49,9 +64,9 @@ async function editorScene(query) {
     sizeKey: query.get('size') || 'wide',
   });
   const photo = query.get('photo') || 'pier';
-  await editor.loadSample(0, photo);
-  await editor.loadSample(1, photo === 'pier' ? 'boulevard' : 'pier');
-  await editor.loadSample(2, photo);
+  for (let i = 0; i < 5; i++) {
+    await editor.loadSample(i, i === 0 ? photo : (i % 2 === 0 ? 'pier' : 'boulevard'));
+  }
   markReady();
 }
 
@@ -59,12 +74,15 @@ async function exportTestScene() {
   const report = document.getElementById('shot-report');
   const state = blankState();
   state.caption = 'EXPORT CHECK';
+  state.callout = 'BEST HEIST OF THE YEAR';
   const hero = await loadImage('samples/pier.jpg');
   const second = await loadImage('samples/boulevard.jpg');
   state.photos = [
     { img: hero, zoom: 1, ox: 0, oy: 0, fit: 'fill' },
     { img: second, zoom: 1, ox: 0, oy: 0, fit: 'fill' },
     { img: hero, zoom: 1.1, ox: 0, oy: 0, fit: 'fill' },
+    { img: second, zoom: 1, ox: 0, oy: 0, fit: 'fill' },
+    { img: hero, zoom: 1, ox: 0, oy: 0, fit: 'fill' },
   ];
   const results = {};
   for (const [key, size] of Object.entries(SIZES)) {
